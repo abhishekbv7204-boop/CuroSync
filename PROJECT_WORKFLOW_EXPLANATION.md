@@ -1,11 +1,8 @@
-# 🏥 CuraSync - Complete Project Workflow Explanation
+ CuraSync - Complete Project Workflow Explanation
 
-## **Overview**
 **CuraSync** is a **Healthcare Management System** built in Java that helps patients find the nearest hospital, route to it efficiently, manage appointments, and handle emergency cases. It combines a desktop GUI with web-based mapping.
 
----
-
-## **PART 1: USER JOURNEY (Beginning to End)**
+**PART 1: USER JOURNEY (Beginning to End)**
 
 ### **Step 1: Application Launch**
 ```
@@ -350,9 +347,9 @@ Patient location → HospitalMapViewer generates JSON
 
 ## **RECAP**
 
-🎯 **What CuraSync does**: Connects patients with hospitals efficiently
+**What CuraSync does**: Connects patients with hospitals efficiently
 
-🔧 **Algorithms used**:
+**Algorithms used**:
 1. ✅ **Dijkstra** - Fastest route to hospital
 2. ✅ **DFS** - Find doctors by specialization
 3. ✅ **Merge Sort** - Sort results efficiently
@@ -360,7 +357,7 @@ Patient location → HospitalMapViewer generates JSON
 5. ✅ **Greedy Algorithm** - Maximize appointment slots
 6. ✅ **Graph + Visualization** - Interactive mapping
 
-💡 **Why these algorithms?**
+**Why these algorithms?**
 - **Dijkstra**: Proven shortest-path solution
 - **Priority Queue**: Real-world emergency triage
 - **Greedy**: Optimal appointment scheduling
