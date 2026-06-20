@@ -1,0 +1,18 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Run CuraSync",
+            "request": "launch",
+            "mainClass": "com.curasync.main.Main",
+            "projectName": "ada_project",
+            "classPaths": [
+                "${workspaceFolder}/bin",
+                "${workspaceFolder}/lib/*"
+            ],
+            "vmArgs": "--enable-native-access=ALL-UNNAMED",
+            "workingDirectory": "${workspaceFolder}"
+        }
+    ]
+}

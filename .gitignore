@@ -1,0 +1,10 @@
+# ----- Secrets -----
+src/main/resources/config.properties
+*.secret
+*.env
+
+# Build / IDE artefacts (optional but recommended)
+*.class
+target/
+.idea/
+*.iml

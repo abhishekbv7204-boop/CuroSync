@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CuraSync Hospital Route Finder</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <!-- Google Fonts (Outfit) -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+        }
+        body, html {
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            background-color: #f4f6fa;
+        }
+        #container {
+            display: flex;
+            height: 100%;
+            width: 100%;
+        }
+        #sidebar {
+            width: 380px;
+            background: linear-gradient(135deg, #111e38 0%, #081022 100%);
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 4px 0 15px rgba(0,0,0,0.3);
+            z-index: 1000;
+            overflow-y: auto;
+        }
+        #map {
+            flex-grow: 1;
+            height: 100%;
+        }
+        .header {
+            padding: 24px;
+            background-color: rgba(255,255,255,0.03);
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            text-align: center;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            color: #4a90e2;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .logo span {
+            color: #ffffff;
+        }
+        .section {
+            padding: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .section-title {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #8b9bb4;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+        .search-box {
+            position: relative;
+            margin-bottom: 16px;
+        }
+        .search-box input {
+            width: 100%;
+            padding: 10px 14px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        .search-box input:focus {
+            outline: none;
+            border-color: #4a90e2;
+            background: rgba(255,255,255,0.1);
+            box-shadow: 0 0 8px rgba(74, 144, 226, 0.4);
+        }
+        .search-box button {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #8b9bb4;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .search-box button:hover {
+            color: #4a90e2;
+        }
+        .hospital-card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: all 0.3s;
+        }
+        .hospital-card.nearest {
+            border-color: #ff4d4d;
+            background: rgba(255, 77, 77, 0.05);
+            box-shadow: 0 4px 15px rgba(255, 77, 77, 0.1);
+        }
+        .hospital-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 6px;
+        }
+        .hospital-card.nearest .hospital-name {
+            color: #ff6b6b;
+        }
+        .hospital-meta {
+            font-size: 13px;
+            color: #a0aec0;
+            line-height: 1.5;
+            margin-bottom: 4px;
+        }
+        .hospital-spec {
+            font-size: 12px;
+            font-weight: 600;
+            color: #4a90e2;
+            margin-top: 8px;
+            display: inline-block;
+            background: rgba(74, 144, 226, 0.15);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .hospital-card.nearest .hospital-spec {
+            color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.15);
+        }
+        .route-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 12px;
+            position: relative;
+        }
+        .route-step:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            left: 9px;
+            top: 20px;
+            bottom: -16px;
+            width: 2px;
+            background: rgba(255,255,255,0.1);
+        }
+        .route-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4a90e2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 700;
+            color: #111e38;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+        .route-step.patient .route-icon {
+            background: #3182ce;
+        }
+        .route-step.nearest .route-icon {
+            background: #e53e3e;
+            color: white;
+        }
+        .route-info {
+            font-size: 13.5px;
+            color: #e2e8f0;
+            line-height: 1.4;
+        }
+        .route-title {
+            font-weight: 600;
+            color: white;
+        }
+        .btn-nav {
+            display: block;
+            width: 100%;
+            padding: 14px;
+            background: #4a90e2;
+            color: white;
+            text-align: center;
+            text-decoration: none;
+            font-weight: 600;
+            border-radius: 8px;
+            margin-top: 16px;
+            transition: all 0.3s;
+            box-shadow: 0 4px 10px rgba(74, 144, 226, 0.3);
+        }
+        .btn-nav:hover {
+            background: #357abd;
+            transform: translateY(-2px);
+        }
+        .legend-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+        .dot-patient { background: #3182ce; }
+        .dot-nearest { background: #e53e3e; }
+        .dot-other { background: #38a169; }
+        .search-results {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #152243;
+            border: 1px solid #23355e;
+            border-radius: 8px;
+            margin-top: -12px;
+            margin-bottom: 16px;
+            display: none;
+        }
+        .search-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #cbd5e0;
+            transition: background 0.2s;
+        }
+        .search-item:hover {
+            background: #23355e;
+            color: white;
+        }
+        .toast {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(17, 30, 56, 0.9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 13.5px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            z-index: 2000;
+            display: none;
+            animation: fadeInOut 3s forwards;
+        }
+        @keyframes fadeInOut {
+            0% { opacity: 0; bottom: 10px; }
+            10% { opacity: 1; bottom: 20px; }
+            90% { opacity: 1; bottom: 20px; }
+            100% { opacity: 0; bottom: 10px; display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="sidebar">
+            <div class="header">
+                <div class="logo">🩺 Cura<span>Sync</span></div>
+                <div style="font-size: 11px; color: #8b9bb4; margin-top: 4px; font-weight: 500; text-transform: uppercase; letter-spacing: 1px;">Hospital Navigator</div>
+            </div>
+            
+            <!-- YOUR STARTING LOCATION (editable) -->
+            <div class="section">
+                <div class="section-title">📍 Your Starting Location</div>
+                <div style="margin-bottom: 6px; font-size: 12px; color: #8b9bb4;">Edit to match your exact location for accurate navigation</div>
+                <input type="text" id="originInput"
+                    style="width:100%; padding:10px 14px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:white; font-size:13px; font-family:'Outfit',sans-serif; transition:all 0.3s;"
+                    placeholder="e.g. Ballari Institute of Technology"
+                    oninput="originLocationName = this.value; updateNavLink();"
+                    onfocus="this.style.borderColor='#4a90e2'; this.style.boxShadow='0 0 8px rgba(74,144,226,0.4)';"
+                    onblur="this.style.borderColor='rgba(255,255,255,0.15)'; this.style.boxShadow='none';" />
+                <div id="originHelp" style="font-size:11px; color:#4a90e2; margin-top:5px; display:none;">✅ Navigation origin updated!</div>
+            </div>
+
+            <!-- SEARCH BAR (Binary Search demo) -->
+
+            <div class="section">
+                <div class="section-title">🔍 Lookup Hospital</div>
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="Search hospital name...">
+                    <button onclick="triggerSearch()">🔍</button>
+                </div>
+                <div class="search-results" id="searchResults"></div>
+            </div>
+
+            <!-- RECOMMENDED NEAREST HOSPITAL -->
+            <div class="section">
+                <div class="section-title">🏥 Recommended Hospital</div>
+                <div id="recommendedContainer">
+                    <!-- Loaded dynamically -->
+                </div>
+            </div>
+
+            <!-- DIJKSTRA ROUTE PATH -->
+            <div class="section">
+                <div class="section-title">🗺 Dijkstra Route</div>
+                <div id="routeContainer">
+                    <!-- Loaded dynamically -->
+                </div>
+                <a href="#" id="gmapsLink" target="_blank" class="btn-nav">🚀 Navigate with Google Maps</a>
+            </div>
+
+            <!-- LEGEND -->
+            <div class="section" style="margin-top: auto;">
+                <div style="display: flex; gap: 16px; justify-content: center; font-size: 12px; color: #a0aec0;">
+                    <div><span class="legend-dot dot-patient"></span>You</div>
+                    <div><span class="legend-dot dot-nearest"></span>Recommended</div>
+                    <div><span class="legend-dot dot-other"></span>Hospitals</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="map"></div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script>
+        // Data placeholders injected by Java
+        const patientLat = __PATIENT_LAT__;
+        const patientLng = __PATIENT_LNG__;
+        const hospitals = __HOSPITALS_JSON__;
+        const route = __ROUTE_JSON__; // Dijkstra path
+        const recommendedId = __SELECTED_HOSPITAL_ID__;
+        // User's named starting location (editable in sidebar)
+        let originLocationName = "__PATIENT_LOCATION_NAME__";
+
+        // Initialize Map
+        const map = L.map('map').setView([patientLat, patientLng], 13);
+        
+        // OpenStreetMap Layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Markers Group
+        const markers = {};
+
+        // Custom Leaflet Icons
+        const patientIcon = L.divIcon({
+            html: '<div style="background-color: #3182ce; width: 14px; height: 14px; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 10px rgba(49, 130, 206, 0.8);"></div>',
+            className: 'custom-div-icon',
+            iconSize: [14, 14],
+            iconAnchor: [7, 7]
+        });
+
+        // Add Patient Marker
+        L.marker([patientLat, patientLng], { icon: patientIcon }).addTo(map)
+            .bindPopup("<b>📍 " + (originLocationName || "Your Location") + "</b><br><small>Lat/Lng: " + patientLat.toFixed(5) + ", " + patientLng.toFixed(5) + "</small>")
+            .openPopup();
+
+        // Build the Google Maps direction URL using the named origin
+        function buildGoogleMapsUrl(destLat, destLng) {
+            // Use place name as origin so Google Maps shows the correct label.
+            // Fallback to coordinates if name is empty.
+            const origin = originLocationName && originLocationName.trim().length > 0
+                ? encodeURIComponent(originLocationName.trim())
+                : patientLat + "," + patientLng;
+            return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destLat},${destLng}&travelmode=driving`;
+        }
+
+        // Update the nav button URL (called after any origin name change)
+        function updateNavLink() {
+            const link = document.getElementById('gmapsLink');
+            if (window._recommendedHosp) {
+                link.href = buildGoogleMapsUrl(window._recommendedHosp.lat, window._recommendedHosp.lng);
+            }
+        }
+
+        // Find recommended hospital from data
+        const recommendedHosp = hospitals.find(h => h.id === recommendedId);
+        window._recommendedHosp = recommendedHosp || null;
+        
+        // Render Recommended Hospital in sidebar
+        const recContainer = document.getElementById('recommendedContainer');
+        if (recommendedHosp) {
+            recContainer.innerHTML = `
+                <div class="hospital-card nearest">
+                    <div class="hospital-name">${recommendedHosp.name}</div>
+                    <div class="hospital-meta">📍 ${recommendedHosp.address}</div>
+                    <div class="hospital-meta">📞 ${recommendedHosp.contact}</div>
+                    <div class="hospital-meta">⚡ Lat/Lng: ${recommendedHosp.lat.toFixed(5)}, ${recommendedHosp.lng.toFixed(5)}</div>
+                    <div class="hospital-spec">${recommendedHosp.specializations}</div>
+                </div>
+            `;
+            document.getElementById('gmapsLink').href = buildGoogleMapsUrl(recommendedHosp.lat, recommendedHosp.lng);
+        } else {
+            recContainer.innerHTML = `<div class="hospital-card">No recommended hospital found.</div>`;
+        }
+
+        // Render Dijkstra Route Steps in sidebar
+        const routeContainer = document.getElementById('routeContainer');
+        routeContainer.innerHTML = '';
+        
+        // Step 0: Patient — use named location if available
+        const pStep = document.createElement('div');
+        pStep.className = 'route-step patient';
+        pStep.innerHTML = `
+            <div class="route-icon">P</div>
+            <div class="route-info">
+                <div class="route-title">${originLocationName && originLocationName.trim() ? originLocationName : 'Your Location'}</div>
+                <div>Lat/Lng: ${patientLat.toFixed(4)}, ${patientLng.toFixed(4)}</div>
+            </div>
+        `;
+        routeContainer.appendChild(pStep);
+
+        // Path coordinates for the polyline
+        const pathCoords = [[patientLat, patientLng]];
+        let currentIdx = 1;
+
+        route.forEach((hosp, idx) => {
+            const isLast = idx === route.length - 1;
+            const rStep = document.createElement('div');
+            rStep.className = 'route-step ' + (isLast ? 'nearest' : '');
+            rStep.innerHTML = `
+                <div class="route-icon">${currentIdx++}</div>
+                <div class="route-info">
+                    <div class="route-title">${hosp.name}</div>
+                    <div>${isLast ? 'Destination' : 'Intermediate Node'}  |  Lat/Lng: ${hosp.lat.toFixed(4)}, ${hosp.lng.toFixed(4)}</div>
+                </div>
+            `;
+            routeContainer.appendChild(rStep);
+            pathCoords.push([hosp.lat, hosp.lng]);
+        });
+
+        // Add Polyline for Route
+        const routePolyline = L.polyline(pathCoords, {
+            color: '#4a90e2',
+            weight: 5,
+            opacity: 0.8,
+            dashArray: '8, 8',
+            lineJoin: 'round'
+        }).addTo(map);
+
+        // Fit map bounds to show route
+        map.fitBounds(routePolyline.getBounds(), { padding: [50, 50] });
+
+        // Add Markers for all hospitals
+        hospitals.forEach(hosp => {
+            const isNearest = hosp.id === recommendedId;
+            const markerColor = isNearest ? '#e53e3e' : '#38a169';
+            
+            const hospitalIcon = L.divIcon({
+                html: `<div style="background-color: ${markerColor}; width: 16px; height: 16px; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 10px rgba(0,0,0,0.3);"></div>`,
+                className: 'custom-div-icon',
+                iconSize: [16, 16],
+                iconAnchor: [8, 8]
+            });
+
+            const marker = L.marker([hosp.lat, hosp.lng], { icon: hospitalIcon }).addTo(map);
+            marker.bindPopup(`
+                <div style="font-family: 'Outfit', sans-serif; min-width: 180px;">
+                    <b style="color: ${markerColor}; font-size: 14px;">${hosp.name}</b><br>
+                    <span style="font-size: 11.5px; color: #555;">📍 ${hosp.address}</span><br>
+                    <span style="font-size: 11.5px; color: #555;">📞 ${hosp.contact}</span><br>
+                    <span style="font-size: 11px; font-weight: bold; color: #3182ce; background: #ebf8ff; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 6px;">${hosp.specializations}</span>
+                </div>
+            `);
+
+            markers[hosp.id] = marker;
+            
+            // Highlight hospital card if clicked on map
+            marker.on('click', () => {
+                showToast("Selected: " + hosp.name);
+            });
+        });
+
+        // Toast Helper
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.style.display = 'block';
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 3000);
+        }
+
+        // Pre-fill origin input on load and wire updateNavLink feedback
+        window.addEventListener('load', () => {
+            const inp = document.getElementById('originInput');
+            if (inp && originLocationName && originLocationName.trim()) {
+                inp.value = originLocationName;
+            }
+        });
+
+        // Override updateNavLink to show confirmation flash
+        const _baseUpdateNavLink = updateNavLink;
+        function updateNavLink() {
+            const link = document.getElementById('gmapsLink');
+            if (window._recommendedHosp) {
+                const origin = originLocationName && originLocationName.trim().length > 0
+                    ? encodeURIComponent(originLocationName.trim())
+                    : patientLat + "," + patientLng;
+                link.href = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${window._recommendedHosp.lat},${window._recommendedHosp.lng}&travelmode=driving`;
+                // Show confirmation
+                const help = document.getElementById('originHelp');
+                if (help) {
+                    help.style.display = 'block';
+                    clearTimeout(help._t);
+                    help._t = setTimeout(() => { help.style.display = 'none'; }, 2000);
+                }
+            }
+        }
+
+        // --- BINARY SEARCH ALGORITHM IN FRONTEND ---
+        // Sort hospitals list by name alphabetically first to enable binary search
+        const sortedHospitals = [...hospitals].sort((a, b) => a.name.localeCompare(b.name));
+
+        function binarySearchHospital(arr, target) {
+            let left = 0;
+            let right = arr.length - 1;
+            target = target.toLowerCase().trim();
+
+            while (left <= right) {
+                let mid = Math.floor((left + right) / 2);
+                let midName = arr[mid].name.toLowerCase().trim();
+
+                if (midName === target) {
+                    return arr[mid];
+                }
+                if (midName < target) {
+                    left = mid + 1;
+                } else {
+                    right = mid - 1;
+                }
+            }
+            
+            // Fuzzy match fallback
+            return arr.find(h => h.name.toLowerCase().includes(target));
+        }
+
+        // Input listener to show search results dynamically
+        const searchInput = document.getElementById('searchInput');
+        const searchResults = document.getElementById('searchResults');
+
+        searchInput.addEventListener('input', () => {
+            const val = searchInput.value.trim().toLowerCase();
+            if (val === '') {
+                searchResults.style.display = 'none';
+                return;
+            }
+
+            // Filter items for autocomplete dropdown
+            const filtered = sortedHospitals.filter(h => h.name.toLowerCase().includes(val));
+            searchResults.innerHTML = '';
+            
+            if (filtered.length > 0) {
+                filtered.forEach(h => {
+                    const div = document.createElement('div');
+                    div.className = 'search-item';
+                    div.innerText = h.name;
+                    div.onclick = () => {
+                        searchInput.value = h.name;
+                        searchResults.style.display = 'none';
+                        triggerSearch();
+                    };
+                    searchResults.appendChild(div);
+                });
+                searchResults.style.display = 'block';
+            } else {
+                searchResults.style.display = 'none';
+            }
+        });
+
+        function triggerSearch() {
+            const query = searchInput.value;
+            const matched = binarySearchHospital(sortedHospitals, query);
+
+            if (matched) {
+                // Fly to the marker and open popup
+                map.flyTo([matched.lat, matched.lng], 16, { animate: true, duration: 1.5 });
+                setTimeout(() => {
+                    markers[matched.id].openPopup();
+                }, 1600);
+                showToast("Found: " + matched.name + " (via Binary Search)");
+            } else {
+                showToast("Hospital not found.");
+            }
+        }
+    </script>
+</body>
+</html>

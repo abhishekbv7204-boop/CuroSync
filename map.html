@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CuraSync Hospital Route Finder</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <!-- Google Fonts (Outfit) -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+        }
+        body, html {
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            background-color: #f4f6fa;
+        }
+        #container {
+            display: flex;
+            height: 100%;
+            width: 100%;
+        }
+        #sidebar {
+            width: 380px;
+            background: linear-gradient(135deg, #111e38 0%, #081022 100%);
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 4px 0 15px rgba(0,0,0,0.3);
+            z-index: 1000;
+            overflow-y: auto;
+        }
+        #map {
+            flex-grow: 1;
+            height: 100%;
+        }
+        .header {
+            padding: 24px;
+            background-color: rgba(255,255,255,0.03);
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            text-align: center;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            color: #4a90e2;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .logo span {
+            color: #ffffff;
+        }
+        .section {
+            padding: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .section-title {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #8b9bb4;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+        .search-box {
+            position: relative;
+            margin-bottom: 16px;
+        }
+        .search-box input {
+            width: 100%;
+            padding: 10px 14px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        .search-box input:focus {
+            outline: none;
+            border-color: #4a90e2;
+            background: rgba(255,255,255,0.1);
+            box-shadow: 0 0 8px rgba(74, 144, 226, 0.4);
+        }
+        .search-box button {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #8b9bb4;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .search-box button:hover {
+            color: #4a90e2;
+        }
+        .hospital-card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: all 0.3s;
+        }
+        .hospital-card.nearest {
+            border-color: #ff4d4d;
+            background: rgba(255, 77, 77, 0.05);
+            box-shadow: 0 4px 15px rgba(255, 77, 77, 0.1);
+        }
+        .hospital-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 6px;
+        }
+        .hospital-card.nearest .hospital-name {
+            color: #ff6b6b;
+        }
+        .hospital-meta {
+            font-size: 13px;
+            color: #a0aec0;
+            line-height: 1.5;
+            margin-bottom: 4px;
+        }
+        .hospital-spec {
+            font-size: 12px;
+            font-weight: 600;
+            color: #4a90e2;
+            margin-top: 8px;
+            display: inline-block;
+            background: rgba(74, 144, 226, 0.15);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .hospital-card.nearest .hospital-spec {
+            color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.15);
+        }
+        .route-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 12px;
+            position: relative;
+        }
+        .route-step:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            left: 9px;
+            top: 20px;
+            bottom: -16px;
+            width: 2px;
+            background: rgba(255,255,255,0.1);
+        }
+        .route-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4a90e2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 700;
+            color: #111e38;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+        .route-step.patient .route-icon {
+            background: #3182ce;
+        }
+        .route-step.nearest .route-icon {
+            background: #e53e3e;
+            color: white;
+        }
+        .route-info {
+            font-size: 13.5px;
+            color: #e2e8f0;
+            line-height: 1.4;
+        }
+        .route-title {
+            font-weight: 600;
+            color: white;
+        }
+        .btn-nav {
+            display: block;
+            width: 100%;
+            padding: 14px;
+            background: #4a90e2;
+            color: white;
+            text-align: center;
+            text-decoration: none;
+            font-weight: 600;
+            border-radius: 8px;
+            margin-top: 16px;
+            transition: all 0.3s;
+            box-shadow: 0 4px 10px rgba(74, 144, 226, 0.3);
+        }
+        .btn-nav:hover {
+            background: #357abd;
+            transform: translateY(-2px);
+        }
+        .legend-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+        .dot-patient { background: #3182ce; }
+        .dot-nearest { background: #e53e3e; }
+        .dot-other { background: #38a169; }
+        .search-results {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #152243;
+            border: 1px solid #23355e;
+            border-radius: 8px;
+            margin-top: -12px;
+            margin-bottom: 16px;
+            display: none;
+        }
+        .search-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #cbd5e0;
+            transition: background 0.2s;
+        }
+        .search-item:hover {
+            background: #23355e;
+            color: white;
+        }
+        .toast {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(17, 30, 56, 0.9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 13.5px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            z-index: 2000;
+            display: none;
+            animation: fadeInOut 3s forwards;
+        }
+        @keyframes fadeInOut {
+            0% { opacity: 0; bottom: 10px; }
+            10% { opacity: 1; bottom: 20px; }
+            90% { opacity: 1; bottom: 20px; }
+            100% { opacity: 0; bottom: 10px; display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="sidebar">
+            <div class="header">
+                <div class="logo">🩺 Cura<span>Sync</span></div>
+                <div style="font-size: 11px; color: #8b9bb4; margin-top: 4px; font-weight: 500; text-transform: uppercase; letter-spacing: 1px;">Hospital Navigator</div>
+            </div>
+            
+            <!-- YOUR STARTING LOCATION (editable) -->
+            <div class="section">
+                <div class="section-title">📍 Your Starting Location</div>
+                <div style="margin-bottom: 6px; font-size: 12px; color: #8b9bb4;">Edit to match your exact location for accurate navigation</div>
+                <input type="text" id="originInput"
+                    style="width:100%; padding:10px 14px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:white; font-size:13px; font-family:'Outfit',sans-serif; transition:all 0.3s;"
+                    placeholder="e.g. Ballari Institute of Technology"
+                    oninput="originLocationName = this.value; updateNavLink();"
+                    onfocus="this.style.borderColor='#4a90e2'; this.style.boxShadow='0 0 8px rgba(74,144,226,0.4)';"
+                    onblur="this.style.borderColor='rgba(255,255,255,0.15)'; this.style.boxShadow='none';" />
+                <div id="originHelp" style="font-size:11px; color:#4a90e2; margin-top:5px; display:none;">✅ Navigation origin updated!</div>
+            </div>
+
+            <!-- SEARCH BAR (Binary Search demo) -->
+
+            <div class="section">
+                <div class="section-title">🔍 Lookup Hospital</div>
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="Search hospital name...">
+                    <button onclick="triggerSearch()">🔍</button>
+                </div>
+                <div class="search-results" id="searchResults"></div>
+            </div>
+
+            <!-- RECOMMENDED NEAREST HOSPITAL -->
+            <div class="section">
+                <div class="section-title">🏥 Recommended Hospital</div>
+                <div id="recommendedContainer">
+                    <!-- Loaded dynamically -->
+                </div>
+            </div>
+
+            <!-- DIJKSTRA ROUTE PATH -->
+            <div class="section">
+                <div class="section-title">🗺 Dijkstra Route</div>
+                <div id="routeContainer">
+                    <!-- Loaded dynamically -->
+                </div>
+                <a href="#" id="gmapsLink" target="_blank" class="btn-nav">🚀 Navigate with Google Maps</a>
+            </div>
+
+            <!-- LEGEND -->
+            <div class="section" style="margin-top: auto;">
+                <div style="display: flex; gap: 16px; justify-content: center; font-size: 12px; color: #a0aec0;">
+                    <div><span class="legend-dot dot-patient"></span>You</div>
+                    <div><span class="legend-dot dot-nearest"></span>Recommended</div>
+                    <div><span class="legend-dot dot-other"></span>Hospitals</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="map"></div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script>
+        // Data placeholders injected by Java
+        const patientLat = 15.1394;
+        const patientLng = 76.9214;
+        const hospitals = [{"id":4711,"name":"ESI Hospital","contact":"108","lat":12.3383212,"lng":76.6323943,"address":"Mysuru (Mysore), India","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4712,"name":"Adithya Adhikari Hospital","contact":"108","lat":12.3315512,"lng":76.6271812,"address":"417 Contour Road, Gokulam Ii Nd Stag Near Vijaya Bank","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4713,"name":"Ashoka Clinic","contact":"108","lat":12.2922036,"lng":76.6423443,"address":"Mysuru (Mysore), India","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4714,"name":"Government Hospital","contact":"108","lat":12.5246186,"lng":76.8998873,"address":"Mysuru (Mysore), India","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4715,"name":"Bone & Joint Clinic","contact":"108","lat":12.2655089,"lng":76.644961,"address":"Mysuru (Mysore), India","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4716,"name":"Clumax Diagnostics","contact":"108","lat":12.2951389,"lng":76.6412904,"address":"Mysuru (Mysore), India","specializations":"Cardiology, Oncology","district":"Mysuru (Mysore)"},{"id":4717,"name":"Vikram Jyoti, Mysuru","contact":"108","lat":12.3247991,"lng":76.6320872,"address":"#2909,New No.22&22/1,Temple Road,Near Vontikoppal Police Station,V.V.Mohalla","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4718,"name":"Sharan Dental Care","contact":"108","lat":12.2849783,"lng":76.6259464,"address":"Mysuru (Mysore), India","specializations":"Neurology, Pediatrics, Orthopedics","district":"Mysuru (Mysore)"},{"id":4719,"name":"Health Sub Center","contact":"108","lat":12.2797,"lng":76.3553,"address":"Mysuru (Mysore), India","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4720,"name":"Government Hospital, Darma pura","contact":"08222-245740","lat":12.2361931,"lng":76.3819613,"address":"Darmapura Main Rd, Dharmapura","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4721,"name":"Sub-Divisional/Taluka Hospital","contact":"108","lat":12.3052379,"lng":76.2911341,"address":"Mysuru (Mysore), India","specializations":"Neurology, Pediatrics, Orthopedics","district":"Mysuru (Mysore)"},{"id":4722,"name":"Ayurvedic Hospital","contact":"108","lat":12.40196,"lng":76.444088,"address":"Mysuru (Mysore), India","specializations":"Cardiology, Oncology","district":"Mysuru (Mysore)"},{"id":4723,"name":"Sanjo Hospital","contact":"108","lat":12.5462334,"lng":76.9351413,"address":"Srinivasapura,M.C. Road","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4724,"name":"Csi Holdsworth Memorial Hospital","contact":"108","lat":12.320427,"lng":76.6500703,"address":"Mandi Mohalla , Na","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4725,"name":"Dr S Kalyana Sundaram","contact":"108","lat":12.3120415,"lng":76.6927032,"address":"Teachers Layout, Mysore","specializations":"Cardiology, Trauma","district":"Mysuru (Mysore)"},{"id":4726,"name":"Bibi Ayesha Milli Hospital","contact":"108","lat":12.336883,"lng":76.657289,"address":"No. 242 Old Mysore - Bangalore Road","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4727,"name":"Panacea Hospital","contact":"108","lat":12.2599361,"lng":76.6443444,"address":"1075/B Akkamahadevi Road,Killa Mohalla Jp Nagar, 2nd Stage","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4728,"name":"Medical Shop","contact":"108","lat":12.291938,"lng":76.6251452,"address":"Mysuru (Mysore), India","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4729,"name":"Government Hospital","contact":"108","lat":12.2594555,"lng":76.6449273,"address":"Mysuru (Mysore), India","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4730,"name":"Mysore Beedi Hospital","contact":"108","lat":12.32895,"lng":76.6878529,"address":"Mysuru (Mysore), India","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4731,"name":"Sushrutha Eye Hospital","contact":"108","lat":12.306409,"lng":76.6455915,"address":"313, Deewans Road Near Marimallappa College Deewans Road","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4732,"name":"B N Shankar Nursing Home","contact":"108","lat":12.3353286,"lng":76.6645852,"address":"Mysuru (Mysore), India","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4733,"name":"Katil Dental clinic","contact":"108","lat":12.3023267,"lng":76.6324517,"address":"Sarasvatipuram 4th Main, Mysuru","specializations":"Cardiology, Trauma","district":"Mysuru (Mysore)"},{"id":4734,"name":"Lakshman Shetty Dental Clinic","contact":"108","lat":12.325512,"lng":76.6218047,"address":"Mysuru (Mysore), India","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4735,"name":"Skin Clinic","contact":"108","lat":12.3248493,"lng":76.6240479,"address":"Mysuru (Mysore), India","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4736,"name":"Government Primary Health Centre","contact":"108","lat":12.5875688,"lng":76.3504388,"address":"Hassan Mysore Road, Bherya","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4737,"name":"Dr Rajshekhar Hospital","contact":"108","lat":12.2906109,"lng":76.711371,"address":"T.N.Pur Road","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4738,"name":"Rural Health Training Center","contact":"108","lat":12.1869745,"lng":76.7879762,"address":"Mysuru (Mysore), India","specializations":"Cardiology, Trauma","district":"Mysuru (Mysore)"},{"id":4739,"name":"Krishnarajanagara Taluk Government Hospital","contact":"108","lat":12.4440053,"lng":76.3817087,"address":"near thasildar office, hassan mysore road","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4740,"name":"Nethradhama Eye Hospital","contact":"108","lat":12.2973328,"lng":76.6413368,"address":"Mysuru (Mysore), India","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4741,"name":"Netra Jyothi Eye Hospital & Phaco Cataract Surgery Centre","contact":"108","lat":12.2882524,"lng":76.6269171,"address":"981, Panchamantra Road, Kuvempu Nagara, Mysore","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4742,"name":"Government Hospital","contact":"108","lat":12.2918023,"lng":76.6359379,"address":"Mysuru (Mysore), India","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4743,"name":"Mims Blood Bank","contact":"108","lat":12.5250141,"lng":76.8992972,"address":"Mysuru (Mysore), India","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4744,"name":"Pragathi Hospital","contact":"108","lat":12.5232166,"lng":76.8990225,"address":"G. H. Road Ashok Nagar","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4745,"name":"Subramanya nursing home","contact":"108","lat":12.5220955,"lng":76.8950471,"address":"Mysuru (Mysore), India","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4746,"name":"Government District Ayurveda Hospital","contact":"108","lat":12.5166576,"lng":76.8939801,"address":"Mysuru (Mysore), India","specializations":"Cardiology, Oncology","district":"Mysuru (Mysore)"},{"id":4747,"name":"Tara super speciality poly clinic","contact":"7411741354","lat":12.5260067,"lng":76.8986417,"address":"Mysuru (Mysore), India","specializations":"Cardiology, Oncology","district":"Mysuru (Mysore)"},{"id":4748,"name":"Krupa Nursing Home","contact":"226012","lat":12.52555,"lng":76.887667,"address":"Mysuru (Mysore), India","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4749,"name":"Niral neuropsychatric care centre","contact":"108","lat":12.5238761,"lng":76.8991248,"address":"Mysuru (Mysore), India","specializations":"Neurology, General Medicine","district":"Mysuru (Mysore)"},{"id":4750,"name":"Anusha Diagnostic Center","contact":"108","lat":12.5275403,"lng":76.8976003,"address":"Mysuru (Mysore), India","specializations":"Cardiology, Oncology","district":"Mysuru (Mysore)"},{"id":4751,"name":"Out patients","contact":"108","lat":12.5258646,"lng":76.9003684,"address":"Mysuru (Mysore), India","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4752,"name":"Mandya Medical Institute Of Science, Mandya","contact":"108","lat":12.5274279,"lng":76.9007931,"address":"District Hospital B.M.Road","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4753,"name":"S R dental clinic","contact":"108","lat":12.521932,"lng":76.8951421,"address":"Mysuru (Mysore), India","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4754,"name":"Paediatric Emergency Unit","contact":"108","lat":12.5261147,"lng":76.8993812,"address":"Mysuru (Mysore), India","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4755,"name":"Sai eshwara cancer and ent center","contact":"108","lat":12.5235865,"lng":76.8960098,"address":"Mysuru (Mysore), India","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4756,"name":"Animal Hospital","contact":"108","lat":12.5165629,"lng":76.8940462,"address":"Mysuru (Mysore), India","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4757,"name":"Mamatha nursing home","contact":"108","lat":12.5270801,"lng":76.8989145,"address":"Mysuru (Mysore), India","specializations":"Cardiology, Oncology","district":"Mysuru (Mysore)"},{"id":4758,"name":"Casualty and emergency","contact":"08232-224040","lat":12.5255778,"lng":76.9004695,"address":"Mandya, Banglore-Mysore Main road ,","specializations":"Trauma, General Medicine","district":"Mysuru (Mysore)"},{"id":4759,"name":"Mandya Multispeciality Hospital","contact":"08232-403111","lat":12.5251462,"lng":76.8983981,"address":"Mysuru (Mysore), India","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4760,"name":"Sanjeevini kids care clinic","contact":"108","lat":12.5156853,"lng":76.8814929,"address":"Mysuru (Mysore), India","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4761,"name":"MIMS outpatient block","contact":"108","lat":12.5258619,"lng":76.9005107,"address":"Mysuru (Mysore), India","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4762,"name":"Vaidi diagnostic centre","contact":"08232-223400","lat":12.5238302,"lng":76.8990216,"address":"Mysuru (Mysore), India","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4763,"name":"Krupa nursing home","contact":"226012","lat":12.5255762,"lng":76.8876715,"address":"Mysuru (Mysore), India","specializations":"Cardiology, Oncology","district":"Mysuru (Mysore)"},{"id":4764,"name":"Shree ragavendra clinic","contact":"08232226223","lat":12.5259905,"lng":76.8986732,"address":"Mysuru (Mysore), India","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4765,"name":"Smile Dental Clinic","contact":"108","lat":12.5158765,"lng":76.8817705,"address":"Mysuru (Mysore), India","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4766,"name":"Nandini nursing home","contact":"08232-22114","lat":12.5257256,"lng":76.8951843,"address":"Mysuru (Mysore), India","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4767,"name":"St Joseph Hospital, Chamarajanagar","contact":"108","lat":11.9277007,"lng":76.9531815,"address":"Siddarthanagar Layout","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4768,"name":"Kshema Hospital","contact":"108","lat":11.9273674,"lng":76.9410163,"address":"Opp: Government Hospital, B.R.Double Road","specializations":"Cardiology, Trauma","district":"Mysuru (Mysore)"},{"id":4769,"name":"Ashwini Hospital","contact":"108","lat":12.0466261,"lng":77.028408,"address":"Elekeri St Near Bus Stand Yelandur","specializations":"Neurology, General Medicine","district":"Mysuru (Mysore)"},{"id":4770,"name":"Murthy Eye Hospital","contact":"108","lat":12.3019925,"lng":76.6201584,"address":"No.25, 1st Main , T.K. Layout, Near Maruthi Temple Kuvempunagar","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4771,"name":"Preethi Centre For Oncology","contact":"108","lat":12.2988923,"lng":76.6455086,"address":"No. 873, M. G. Road, Laksmipuram","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4772,"name":"Netra Jyothi Eye Hospital","contact":"108","lat":12.3161539,"lng":76.6510481,"address":"1475, 1 st Floor , Above Hotel Venkatesh Bhavan , Near Ayurvedic Hospital , Mission Hospital Road","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4773,"name":"City Bone and Joint Center","contact":"108","lat":12.3165288,"lng":76.6294833,"address":"Near Nilgiris Super Market, Vinoba Road, Hunsur Road","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4774,"name":"Mamatha Ganga Maternity Centre","contact":"108","lat":12.436917,"lng":76.3813385,"address":"7Th Main Road, Near Karnataka Bank, K.R. Nanagar","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4775,"name":"Bhanavi Hospital","contact":"108","lat":12.2927546,"lng":76.6271737,"address":"#P2, Jcst, E & F Block,Anikethana Road, Kuvemu Nagar,Behind Gnana Ganga School","specializations":"Cardiology, Trauma","district":"Mysuru (Mysore)"},{"id":4776,"name":"Bharath Hospital and Institute Of Oncology","contact":"108","lat":12.3528459,"lng":76.6082923,"address":"No. 438, Hebbal Outer Ring Road","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4777,"name":"Mandya E.N.T. Care Centre And Hospital","contact":"108","lat":12.5217583,"lng":76.8991001,"address":"Varun Medicals Building,G.H.Road Ashoknagar","specializations":"Cardiology, Oncology","district":"Mysuru (Mysore)"},{"id":4778,"name":"Mythri Hospital, Mysuru","contact":"108","lat":12.2902204,"lng":76.6494012,"address":"Narayana Shastry Road, Chamundipuram","specializations":"Neurology, Pediatrics, Orthopedics","district":"Mysuru (Mysore)"},{"id":4779,"name":"Mithi Surgery Hospital","contact":"108","lat":12.2972852,"lng":76.6536548,"address":"OppositeTo Sbm Bank, J.S.S Hospital, Ramanuja Road, Agrahara","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4780,"name":"Sri Nidhi Hospital, Mandya","contact":"108","lat":12.5218944,"lng":76.8971206,"address":"100 Ft Road , Ashok Nagar","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4781,"name":"Vidyaranya Hospital (P) Ltd","contact":"108","lat":12.2887482,"lng":76.6496627,"address":"#2876, 4Th Cross,Narayana Shastry Road, Chamundipuram,Opposite G.R.T,Chamundipuram","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4782,"name":"Usha Kiran Eye Hospital and Usha Kiran Charitable Trust","contact":"108","lat":12.2982394,"lng":76.6443821,"address":"No. 877 / 1, Dewans Road, Lakshmipuram","specializations":"Neurology, General Medicine","district":"Mysuru (Mysore)"},{"id":4783,"name":"A V Hospital","contact":"108","lat":12.3040307,"lng":76.6814382,"address":"No. 73/B, Vinaya Marga, Siddarthanagar","specializations":"Neurology, General Medicine","district":"Mysuru (Mysore)"},{"id":4784,"name":"Priyadarshini General Hospital","contact":"108","lat":12.342081,"lng":76.6333455,"address":"#13,4Th Cross,7Nth Main,Brindavan Extn.","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4785,"name":"Rama Krishna Hospital, Mysuru","contact":"108","lat":12.2861464,"lng":76.6518205,"address":"# 1120/F-58 B, 1st Main, J. L. B. Road, Vidyaranyapuram","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4786,"name":"Sri Srinivasa Hospital, Mysuru","contact":"108","lat":12.3245957,"lng":76.6768898,"address":"No. 03, Mahadevapura Double Road, Opposite Jss Jan Shikshan Samsthan, Udayagiri","specializations":"Neurology, General Medicine","district":"Mysuru (Mysore)"},{"id":4787,"name":"Ashraya Maternity Home","contact":"108","lat":12.5264786,"lng":76.8958734,"address":"1st Cross, V.V.Nagar, Kallahalli","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4788,"name":"Vaatsalaya Hospital, Mysuru","contact":"108","lat":12.2952836,"lng":76.648398,"address":"Sita Ranga Healthcare Complex,No.1659, Narayan Shastri Road,Narayan Shastri Road, Lakshmipuram","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4789,"name":"Ramesh Hospital For Piles and Proctology","contact":"108","lat":12.3101589,"lng":76.6563984,"address":"410 Contour Road Gokulam 3Road Stage","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4790,"name":"Simha Heart Foundation","contact":"108","lat":12.2965546,"lng":76.6466251,"address":"933 Hemaganga 1st Main Laxmipuram","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4791,"name":"Sharda Surgery and Cyro- Surgery Centre","contact":"108","lat":12.3113639,"lng":76.647771,"address":"Opposite Sangeetha Lodge, 1374, Naryana Shastri Road","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4792,"name":"V.A.M.Hospital","contact":"108","lat":11.8173778,"lng":76.6846776,"address":"Ooty Mysore Road, Gundlupete","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4793,"name":"Harsha Hospital, K.R.Nagar","contact":"108","lat":12.4400222,"lng":76.3810609,"address":"Arkanatha Road,K.R.Nagar","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4794,"name":"Assissi Hospital","contact":"108","lat":11.8338514,"lng":76.677551,"address":"P.B.No.14, Gundlupete","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4795,"name":"Raman Memorial Hospital-Mysore","contact":"108","lat":12.2922659,"lng":76.6422933,"address":"1498, Ramaiyer Road, K.M.Puram, Near Sharadavilas Educational Institutions","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4796,"name":"Chaitra Hospital","contact":"108","lat":12.4356022,"lng":76.3815317,"address":"Y.R. Puttanniah Road, Basaveshvara Block, K.R. Nagar","specializations":"Cardiology, Oncology","district":"Mysuru (Mysore)"},{"id":4797,"name":"Chitra's Hospital","contact":"108","lat":12.3144454,"lng":76.6552249,"address":"25/1A Irwin Road","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4798,"name":"Pragati Visions Super Speciality Eye Hospital","contact":"108","lat":12.3245891,"lng":76.6099298,"address":"#1-E, Off Hunsur Road,Vijaynagar 3Road Stage (Near Aishwarya Petrol Bunk), Hinkal","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4799,"name":"Santhathi Infertility and Maternity Center","contact":"108","lat":12.5247275,"lng":76.898911,"address":"No. 1238, G.H.Road, Ashok Nagar","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4800,"name":"Shrisha Hospital","contact":"108","lat":11.7934335,"lng":76.1646844,"address":"Pulpally","specializations":"Neurology, Pediatrics, Orthopedics","district":"Mysuru (Mysore)"},{"id":4801,"name":"Government Hopital, Heggadadevankote","contact":"8228255210","lat":12.0824558,"lng":76.3351884,"address":"juniour college, mysore main road","specializations":"Neurology, Pediatrics, Orthopedics","district":"Mysuru (Mysore)"},{"id":4802,"name":"Govt. Hospital, Akkihebbalu","contact":"8230264040","lat":12.6214584,"lng":76.3943817,"address":"Akkihebbalu","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4803,"name":"Government Hospital Thendekere","contact":"108","lat":12.59482,"lng":76.556945,"address":"Thendekere","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4804,"name":"Narayanapura Government Hospital","contact":"08236-209182","lat":12.6053018,"lng":76.6235809,"address":"Narayanapura ,Melkote Road","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4805,"name":"Government Hospital Seelanere","contact":"108","lat":12.634737,"lng":76.559052,"address":"Near Govt High school, Sheelanere, Sheelanere Hobli","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4806,"name":"Devaraj Government Hopital, Hunsur","contact":"108","lat":12.3052341,"lng":76.2915339,"address":"Opp Police Station, Hunsur","specializations":"Neurology, Pediatrics, Orthopedics","district":"Mysuru (Mysore)"},{"id":4807,"name":"Cheluvamba Maternity Government Hospital","contact":"108","lat":12.4412745,"lng":76.3802013,"address":"Krishnarajanagara","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4808,"name":"Mulluru Government Hospital","contact":"08228-210033","lat":11.9785983,"lng":76.4770823,"address":"Govt High School, Nayakara Beedi","specializations":"Neurology, General Medicine","district":"Mysuru (Mysore)"},{"id":4809,"name":"Government Hospital, Bannur","contact":"8227275363","lat":12.3359785,"lng":76.8609916,"address":"Bannur","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4810,"name":"Pandavapura Government Hospital","contact":"08236-255377","lat":12.498917,"lng":76.674528,"address":"Beside Government Bus stand, Pandavapura","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4811,"name":"Government Hospital, Hanasoge","contact":"108","lat":12.547384,"lng":76.1765271,"address":"Near Police Station, Hanasoge","specializations":"Neurology, General Medicine","district":"Mysuru (Mysore)"},{"id":4812,"name":"Government Hospital Mahadevapur","contact":"08236-250468","lat":12.3971086,"lng":76.775446,"address":"Mahadevapura Main road","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4813,"name":"Ravanduru Government Hospital","contact":"8223277161","lat":12.4371224,"lng":76.1908562,"address":"Beside govt High school, Ravandur, Kittur main road","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4814,"name":"Government Hospital","contact":"08229-210300","lat":11.8422816,"lng":76.7065684,"address":"Ingalvadi Rd, Bannithalapura","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4815,"name":"New DH Chamrajnagar","contact":"108","lat":11.9269937,"lng":76.9424311,"address":"Galipur, Chamarajanagar","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4816,"name":"Government hospital Thaggahalli","contact":"8232239748","lat":12.486381,"lng":76.936931,"address":"Near Bus Stand, Thaggahalli","specializations":"Neurology, General Medicine","district":"Mysuru (Mysore)"},{"id":4817,"name":"Mirle Government Hospital","contact":"108","lat":12.537428,"lng":76.327599,"address":"K R Nagar Saligrama Road","specializations":"Cardiology, Oncology","district":"Mysuru (Mysore)"},{"id":4818,"name":"Government Hospital, Belagola","contact":"8236257520","lat":12.3941116,"lng":76.6064078,"address":"Beside government school, Belogola, Srirangapatnataluk","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4819,"name":"Government Hospital Turuganuru","contact":"108","lat":12.3866747,"lng":76.9034381,"address":"Turuvekere PHC (General Hospital)","specializations":"Neurology, General Medicine","district":"Mysuru (Mysore)"},{"id":4820,"name":"Government Hospital, Bookanakere","contact":"108","lat":12.5623893,"lng":76.5273672,"address":"Bookanakere","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4821,"name":"Kaggaladundi Government Hospital","contact":"08229-210510","lat":11.778244,"lng":76.569076,"address":"Oppist Hotel, Hangala Hobli, NH 212 Calicut Mysore Main Road","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4822,"name":"Government Hospital, Beguru","contact":"08229-231166","lat":11.9345404,"lng":76.6721646,"address":"Police Station Beguru, Beguru Hobli, NH 212 Calicut Mysore Main Road","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4823,"name":"Government Maternity Hospital, Hadya","contact":"108","lat":12.5130124,"lng":76.228867,"address":"Hadya","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4824,"name":"Hosuru Government Hospital","contact":"108","lat":12.498981,"lng":76.267137,"address":"K R Nagar Hansoge Road","specializations":"Neurology, General Medicine","district":"Mysuru (Mysore)"},{"id":4825,"name":"Government Hospital","contact":"8232272600","lat":12.5135565,"lng":76.8786146,"address":"V V Nagar, Mandya","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4826,"name":"Sadolalu Government Hospital","contact":"108","lat":12.5446119,"lng":77.0046771,"address":"Sadolalu village , Kasaba Hobli","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4827,"name":"Saligrama Government Hospital","contact":"108","lat":12.5627754,"lng":76.2629468,"address":"K R Nagar Konanur Road, Ksrtc Bus Stand","specializations":"Cardiology, Oncology","district":"Mysuru (Mysore)"},{"id":4828,"name":"Government Hospital, Terakanambi","contact":"08229-232322","lat":11.8139493,"lng":76.7901583,"address":"Near Bus Stand, Terakanambi, Gundlupet Chamarajanagar Main Road","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4829,"name":"All India Institute of Speech and Hearing, Mysore","contact":"108","lat":12.308723,"lng":76.616929,"address":"Naimisham Campus, Road No.3, Manasagangothri,Mysuru, Karnataka","specializations":"Neurology, Pediatrics, Orthopedics","district":"Mysuru (Mysore)"},{"id":4830,"name":"Government Hospital, Chikkabyadarahalli","contact":"08236-269102","lat":12.501586,"lng":76.7314755,"address":"Mandya - Pandavapura Main Rd, Chikkabyadarahalli","specializations":"Neurology, Pediatrics, Orthopedics","district":"Mysuru (Mysore)"},{"id":4831,"name":"Government Hospital, Chinakurali","contact":"08236-268328","lat":12.539843,"lng":76.599375,"address":"Beside Veternity Hospital, Tendekere, Mysuru-K R Pet Road, Chinakuruli","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4832,"name":"Government Hospital, Hampapura","contact":"108","lat":12.121662,"lng":76.47407,"address":"Hampapura","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4833,"name":"Public Hospital, Malavalli","contact":"108","lat":12.3848655,"lng":77.0598595,"address":"Kollegala Main road, Malavalli, Public Malavalli","specializations":"Neurology, Pediatrics, Orthopedics","district":"Mysuru (Mysore)"},{"id":4834,"name":"Government Hospital Tagadur","contact":"8221235293","lat":12.0871358,"lng":76.8172676,"address":"Near Kommannakere,Kakkarahatti road, Tagadur, Megalkeri","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4835,"name":"Krishnarajasagara, Government Hospital","contact":"8236257066","lat":12.4072449,"lng":76.5719933,"address":"Behind police station, K.R.S,Srirangapatna TQ Mandya Dist","specializations":"Neurology, Pediatrics, Orthopedics","district":"Mysuru (Mysore)"},{"id":4836,"name":"Government Hospital, Nanjangud","contact":"8221226415","lat":12.1276786,"lng":76.6811152,"address":"Jevargi - Chamarajanagar Road, Chamalapura","specializations":"Neurology, General Medicine","district":"Mysuru (Mysore)"},{"id":4837,"name":"Government Hospital Srirangapatna","contact":"08236-252444","lat":12.4183969,"lng":76.6932024,"address":"Opposite to KEB office, Ganjam Road","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4838,"name":"Government Hospital, T.Narasipura","contact":"8227260444","lat":12.2119773,"lng":76.8981353,"address":"Behind Little flower nursery and higher primary school, T Narasipura","specializations":"Cardiology, Trauma","district":"Mysuru (Mysore)"},{"id":4839,"name":"Government Hospital, Venkatayyana Chatra","contact":"8226238033","lat":11.8595569,"lng":76.9573348,"address":"Mysuru (Mysore), India","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4840,"name":"Government Hospital Yelandur","contact":"08226-240174","lat":12.0587104,"lng":77.0327776,"address":"near police station, Yelandur, Kadakalkeri","specializations":"Cardiology, Trauma","district":"Mysuru (Mysore)"},{"id":4841,"name":"Government Hospital, H.H.Koppalu","contact":"108","lat":12.408064,"lng":76.9705011,"address":"Hittanahally, B.G. Doddi","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4842,"name":"Devipura, Talagavadi Hospital","contact":"108","lat":12.4282637,"lng":77.0147126,"address":"Mysuru (Mysore), India","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4843,"name":"Government Hospital Hosuru T.M.Hosur","contact":"108","lat":12.4462335,"lng":76.7597507,"address":"opposite to government lower primary school, T M Hosur,srirangapatna taluk,Mandya dist","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4844,"name":"Heggadahalli Government Hospital","contact":"08229-237165","lat":11.880163,"lng":76.6854297,"address":"Near Arlikatte, Beguru Hobli, Gundlupet Akalapura Main Road","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4845,"name":"Community Health Center Pulpally","contact":"+91-4936 240-406","lat":11.7942969,"lng":76.1651668,"address":"Pulpally-Perikkallor_Kabanigiri_Marakkadav_Seethamount Road, Pulpally","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4846,"name":"Anagha Hospital","contact":"108","lat":12.2996624,"lng":76.6524005,"address":"Agrahara, Fort Mohalla, Mysuru","specializations":"Cardiology, Oncology","district":"Mysuru (Mysore)"},{"id":4847,"name":"Clearmedi Radiant Hospital","contact":"108","lat":12.3217256,"lng":76.609247,"address":"Vijayanagar, Mysuru","specializations":"Cardiology, Trauma","district":"Mysuru (Mysore)"},{"id":4848,"name":"Sourabha Superspeciality Heart Care Centre","contact":"108","lat":12.2873804,"lng":76.6242974,"address":"Vishwapatha Road, Kuvempu Nagara, Mysore","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4849,"name":"Dr. Agarwals Eye Hospital","contact":"108","lat":12.2863447,"lng":76.6309373,"address":"Adhichuchunagiri Road, Kuvempu Nagara, Mysore","specializations":"Neurology, General Medicine","district":"Mysuru (Mysore)"},{"id":4850,"name":"ESI Hospital","contact":"108","lat":12.3079269,"lng":76.6471859,"address":"ESI Hospital Road, Subbarayanakere, Chamrajpura, Mysuru","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4851,"name":"Shivaratri Rajendra Hospital","contact":"108","lat":11.9271706,"lng":76.940446,"address":"Bramaramba Extension, Chamarajanagar","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4852,"name":"DRM Multi Speciality Hospital","contact":"108","lat":12.32484,"lng":76.6321094,"address":"Vontikoppal, Mysuru","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4853,"name":"Dharani Hospital","contact":"108","lat":12.0439007,"lng":76.9801869,"address":"Santhamarahalli","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4854,"name":"K.S.R.T.C. Hospital","contact":"108","lat":12.3364551,"lng":76.6523561,"address":"Hanumantha Nagar, Bannimantap, Mysuru","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4855,"name":"Disha Hospital","contact":"108","lat":12.3233058,"lng":76.6642719,"address":"Gandhi Nagar, Gayathri Puram, Mysuru","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4856,"name":"Aashritha Neuro-psychiatric care","contact":"108","lat":12.35541,"lng":76.6156384,"address":"Hebbal Industrial Estate, Hebbal, Mysuru","specializations":"Neurology, General Medicine","district":"Mysuru (Mysore)"},{"id":4857,"name":"Pralaksha Hospital","contact":"108","lat":12.3403325,"lng":76.5857929,"address":"Vedha Arcade, Hootagalli, Ilavala Hobli","specializations":"Neurology, General Medicine","district":"Mysuru (Mysore)"},{"id":4858,"name":"Agasthya Hospital","contact":"108","lat":12.3021508,"lng":76.6281828,"address":"14th Main Road, Saraswathipuram, Mysore","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4859,"name":"N J Hospital","contact":"108","lat":12.348183,"lng":76.551566,"address":"Aloka Palace Road, Yelawala, Mysore","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4860,"name":"Al Ansaar Hospital","contact":"108","lat":12.3193378,"lng":76.663692,"address":"Mohammed Sait Block, Earangere, Gayathri Puram, Mysuru","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4861,"name":"Prerana Hospital","contact":"108","lat":12.2886897,"lng":76.6223539,"address":"452, Paduvana Road, A and B Complex, Kuvempunagara North, TK Layout, Mysore","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4862,"name":"Bhanavi Hospital","contact":"108","lat":12.2835486,"lng":76.6274948,"address":"Khb Colony, Kuvempu Nagara, Mysore","specializations":"Cardiology, Trauma","district":"Mysuru (Mysore)"},{"id":4863,"name":"Nirmala Hospital","contact":"108","lat":12.2988631,"lng":76.6975923,"address":"T Narsipura Road, Alanahalli Village, Mysuru","specializations":"Neurology, Pediatrics, Orthopedics","district":"Mysuru (Mysore)"},{"id":4864,"name":"Nataraja Hospital","contact":"108","lat":12.2728089,"lng":76.6274538,"address":"Sriramapura, Mysore","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4865,"name":"Danvantri Hospital","contact":"108","lat":12.2625556,"lng":76.6235469,"address":"Sriramapura, BEML Nagar, Mysore","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4866,"name":"Shakthi Hill View Hospital","contact":"108","lat":12.3015129,"lng":76.6933065,"address":"Narsipura Road, Nagara, Mysuru","specializations":"Cardiology, Oncology","district":"Mysuru (Mysore)"},{"id":4867,"name":"Jayadeva Hospital","contact":"108","lat":12.3413058,"lng":76.6236452,"address":"KRS Road, Kumbarakoppal, Mahadeshwara Badavane Layout, Mysuru","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4868,"name":"Sigma Hospital","contact":"108","lat":12.3003215,"lng":76.6239723,"address":"Vishwashanti PU College, Kamakshi Hospital Road, Kuvempunagara North, Kuvempu Nagara, Mysore","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4869,"name":"Sindhu Eye Hospital","contact":"108","lat":12.2960015,"lng":76.6393656,"address":"Chamarajapura, Chamarajapuram Mohalla, Lakshmipuram, Mysore","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4870,"name":"Preety Cancer Hospital","contact":"108","lat":12.301903,"lng":76.6433102,"address":"Mangalore - Mysore Highway, Chamarajapura, Chamarajapuram Mohalla, Lakshmipuram, Mysuru","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4871,"name":"Brindavan Hospital","contact":"108","lat":12.3233006,"lng":76.6271655,"address":"Kalidasa Road, Vani Vilas Mohalla, Mysuru","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4872,"name":"R K Hospital","contact":"108","lat":11.9280528,"lng":76.9443649,"address":"Bramaramba Extension, Chamarajanagar","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4873,"name":"Hitech Kidney Stone Hospital","contact":"108","lat":12.316897,"lng":76.6504964,"address":"Near K.R Hospital, Kabir Road, CFTRI Campus, Yadavagiri, Mysuru","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4874,"name":"Dr. Jyothis Health Care Private Limited","contact":"108","lat":12.3174549,"lng":76.6913103,"address":"Shakthi Nagar Post, Dr Rajkumar Main Road, JSS Layout, Mysuru","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4875,"name":"Leelavathi Hospital","contact":"108","lat":12.2875301,"lng":76.6523576,"address":"Bettadpura, Mysuru","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4876,"name":"Queen Mary Hospital","contact":"108","lat":12.2354134,"lng":76.6049755,"address":"Kalalavadigate, HD Kote Road, Mysuru","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4877,"name":"Amruthanandamayi Hospital","contact":"108","lat":12.2929525,"lng":76.5832564,"address":"Roopa Nagar, Dasanakoppalu","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4878,"name":"Bhagvan Mahaveer Darshan Eye Hospital","contact":"108","lat":12.3629618,"lng":76.6600654,"address":"Siddalingapura Village, Hale Kesare","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4879,"name":"Sapthagiri Hospital","contact":"108","lat":12.302911,"lng":76.6443991,"address":"Dewance Road, Near Chamraja Mohalla, Mysuru","specializations":"Neurology, Pediatrics, Orthopedics","district":"Mysuru (Mysore)"},{"id":4880,"name":"Gayatri Hospital","contact":"108","lat":12.320474,"lng":76.648926,"address":"Tilak Nagar, Mysuru","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4881,"name":"Karuna Trust Hospital","contact":"108","lat":12.0421949,"lng":77.0458121,"address":"Yelandur Rural","specializations":"Neurology, Pediatrics, Orthopedics","district":"Mysuru (Mysore)"},{"id":4882,"name":"JSS Hospital","contact":"108","lat":11.9275064,"lng":76.9493057,"address":"JSS College Main Road, Siddhartha Nagar","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4883,"name":"Priyadarshini General Hospital","contact":"108","lat":12.342084,"lng":76.633334,"address":"Brindavan Extension 1st Stage, Brindavan Extension, Mysuru","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4884,"name":"Supriya Hospital","contact":"108","lat":12.3336069,"lng":76.5995692,"address":"Vijayanagar, Mysore","specializations":"Cardiology, Trauma","district":"Mysuru (Mysore)"},{"id":4885,"name":"Government Panchakarma Hospital","contact":"108","lat":12.3407605,"lng":76.6323705,"address":"KRS Road, Brindavan Extension 1st Stage, Brindavan Extension, Mysuru","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4886,"name":"Surakash Hospital","contact":"108","lat":12.5204696,"lng":76.9009104,"address":"Kolakaranadoddi, Nehru Nagar, Mandya","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4887,"name":"Manasa Dhara Hospital","contact":"108","lat":12.5011742,"lng":76.8229476,"address":"Kalenahalli, Mandya","specializations":"Cardiology, Trauma","district":"Mysuru (Mysore)"},{"id":4888,"name":"ESI Hospital","contact":"108","lat":12.523573,"lng":76.892258,"address":"Vidya Nagar, Mandya","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4889,"name":"Sharada Health Care Centre","contact":"108","lat":12.52403,"lng":76.900541,"address":"Nehru Nagar, Mandya","specializations":"Cardiology, Oncology","district":"Mysuru (Mysore)"},{"id":4890,"name":"Dr. Sudarshan Surgical & Gastro Care","contact":"108","lat":12.5253513,"lng":76.8979419,"address":"Ashok Nagar, Mandya","specializations":"Cardiology, Oncology","district":"Mysuru (Mysore)"},{"id":4891,"name":"Surabhi Hospital","contact":"108","lat":12.5242658,"lng":76.8971997,"address":"Ashok Nagar, Mandya","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4892,"name":"Bommanahalli Hospital","contact":"108","lat":12.5296139,"lng":76.8903847,"address":"Shankar Pura, Mandya","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4893,"name":"K V Shankare Gowda Memorial Hospital","contact":"108","lat":12.5238338,"lng":76.8911525,"address":"Vidya Nagar, Mandya","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4894,"name":"Ayurvedic Hospital","contact":"108","lat":12.5168877,"lng":76.8939747,"address":"Shankarnagar, Mandya","specializations":"Cardiology, Oncology","district":"Mysuru (Mysore)"},{"id":4895,"name":"Karunya Homeo Hospital and Research Centre","contact":"108","lat":11.7918828,"lng":76.1667297,"address":"Pulpally","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4896,"name":"Assisi Hospital","contact":"108","lat":11.773541,"lng":77.008238,"address":"Talavadi","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4897,"name":"JMGV Hospital","contact":"108","lat":11.775842,"lng":77.005864,"address":"Talavadi","specializations":"Neurology, Pediatrics, Orthopedics","district":"Mysuru (Mysore)"},{"id":4898,"name":"SC Irulam","contact":"108","lat":11.7520755,"lng":76.1880983,"address":"Mysuru (Mysore), India","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4899,"name":"sc adikolly","contact":"108","lat":11.7812693,"lng":76.1946156,"address":"Mysuru (Mysore), India","specializations":"Neurology, General Medicine","district":"Mysuru (Mysore)"},{"id":4900,"name":"SC MARAKKADAVU","contact":"108","lat":11.8627883,"lng":76.1963376,"address":"Mysuru (Mysore), India","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4901,"name":"SC CHAAMAPPARA","contact":"108","lat":11.8364194,"lng":76.208879,"address":"Mysuru (Mysore), India","specializations":"Neurology, General Medicine","district":"Mysuru (Mysore)"},{"id":4902,"name":"SC SASIMALA","contact":"108","lat":11.8138333,"lng":76.2000466,"address":"Mysuru (Mysore), India","specializations":"Cardiology, Trauma","district":"Mysuru (Mysore)"},{"id":4903,"name":"ESI Hospital","contact":"108","lat":12.1329293,"lng":76.6760084,"address":"Nanjangud, Karnataka","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4904,"name":"Gowri Hospital","contact":"108","lat":12.1205006,"lng":76.6795187,"address":"MGS Road, 14th Cross RP Rd, Deviramanahalli, Nanjangud, Karnataka","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4905,"name":"Ideal Hospital","contact":"108","lat":12.1195559,"lng":76.6762836,"address":"Rashtra Pati Rd, Kempe Gowda Layout, Nanjangud, Karnataka","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4906,"name":"Government Hospital","contact":"108","lat":12.5459062,"lng":76.179823,"address":"Hanasoge, Hanasoge, Karnataka","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4907,"name":"Church Hospital","contact":"108","lat":12.5005873,"lng":76.6754032,"address":"Pandavapura, Karnataka","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4908,"name":"Government Hospital","contact":"108","lat":12.4848243,"lng":76.3959807,"address":"Katnalhantha, Karnataka","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4909,"name":"Kesturu Koppalu Government Hospital","contact":"108","lat":12.4660571,"lng":76.3038002,"address":"Kestur, Karnataka","specializations":"Neurology, Pediatrics, Orthopedics","district":"Mysuru (Mysore)"},{"id":4910,"name":"Government Primary Health Centre","contact":"108","lat":12.457708,"lng":76.6170242,"address":"Aralakuppe, Karnataka","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4911,"name":"Sridevi Hospital","contact":"108","lat":12.4426434,"lng":76.3842745,"address":"Krishnarajanagara, Karnataka","specializations":"Neurology, Pediatrics, Orthopedics","district":"Mysuru (Mysore)"},{"id":4912,"name":"Government Hospital","contact":"108","lat":12.4090718,"lng":76.488119,"address":"HOSAKOTE, HOSAKOTE, Ilavala Hobli, Karnataka","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4913,"name":"Hospital","contact":"108","lat":12.3789744,"lng":76.1622979,"address":"Doddabylalu, Karnataka","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4914,"name":"Government Hospital","contact":"108","lat":12.356406,"lng":76.5437845,"address":"Yelawala, Karnataka","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4915,"name":"St Josephs Hospital","contact":"108","lat":12.3413224,"lng":76.6555307,"address":"Bangalore - Mysore Rd, Bannimantap, Mysuru, Karnataka","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4916,"name":"Wee Care Hospital (ngo)","contact":"108","lat":12.340538,"lng":76.57483,"address":"Belawadi, Karnataka","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4917,"name":"Primary Health Center","contact":"108","lat":12.3395,"lng":76.1906,"address":"Chilkunda, Mysore, SH-88, Mangolore Mysore Road, Mysore, Mysore, Karnataka","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4918,"name":"Railway Hospital","contact":"108","lat":12.3257179,"lng":76.635622,"address":"Vontikoppal Railway Colony, V V Mohalla, V V Mohalla, Gokulam 4th Stage, Gokulam, Mysuru, Karnataka","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4919,"name":"Vigneshwara Nursing Home","contact":"108","lat":12.3231623,"lng":76.5859706,"address":"No. 8189, 2nd Phase, Vijayanagar 4th Stage, Mysuru, Karnataka","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4920,"name":"V V Puram Esi Hosital Dispensary","contact":"108","lat":12.3230417,"lng":76.633185,"address":"Vontikoppal, Mysuru, Karnataka","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4921,"name":"Cheluvamba Hospital","contact":"108","lat":12.3141191,"lng":76.6493079,"address":"Opp Mysore Medical College, KR Hospital Compound, Irwin Rd, Devaraja Mohalla, Devraj Mohalla, Mysuru, Karnataka","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4922,"name":"PHC Badagalapura Matakere","contact":"08228-265410","lat":11.9143072,"lng":76.4874043,"address":"Temple, Badagalapura Matakere, Main Road","specializations":"Cardiology, Oncology","district":"Mysuru (Mysore)"},{"id":4923,"name":"Government Hospital","contact":"108","lat":12.3127981,"lng":76.6162139,"address":"university of mysore campus, Manasa Gangothiri, Mysuru, Karnataka","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4924,"name":"Esis Dispensary Hunsur","contact":"108","lat":12.3107629,"lng":76.2916522,"address":"Hunsur, Karnataka","specializations":"Neurology, General Medicine","district":"Mysuru (Mysore)"},{"id":4925,"name":"Government Hospital","contact":"108","lat":12.3017591,"lng":76.6189567,"address":"TK layout, 90, Kuvempunagara North, TK Layout, Mysuru, Karnataka","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4926,"name":"Poornima Hospital","contact":"108","lat":12.3003795,"lng":76.6263986,"address":"662, Vishwamanava Double Road, Saraswathipuram, Mysuru, Karnataka","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4927,"name":"Primary Health Center","contact":"108","lat":12.299634,"lng":76.183317,"address":"Harinahalli, Mysore, SH-90, Virajpet Mysore Road, Mysore, Mysore, Karnataka","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4928,"name":"St. Marys DE Addiction Hospital","contact":"108","lat":12.2844714,"lng":76.6419027,"address":"Ashokapuram, Mysuru, Karnataka","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4929,"name":"Suyog Hospital","contact":"108","lat":12.2822952,"lng":76.620141,"address":"Dakshineshwara Marga, Ramakrishnanagar, Mysuru, Karnataka","specializations":"Cardiology, Trauma","district":"Mysuru (Mysore)"},{"id":4930,"name":"Karuna Hospital","contact":"108","lat":12.2797607,"lng":76.6253639,"address":"State Bank Of Mysore, 671/B, M Block, Nrupatunga Rd, Kuvempu Nagar 1st Stage, Kuvempu Nagara, Mysuru, Karnataka","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4931,"name":"Kamakshi Hospital","contact":"108","lat":12.2650041,"lng":76.6356659,"address":"N H Palya, Block D, JP Nagar, Mysuru, Karnataka 5700031","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4932,"name":"Srinivasa Polyclinic & Day Care","contact":"108","lat":12.3288588,"lng":76.6635769,"address":"Shivaji Main Road N R Mohalla, Mysuru","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4933,"name":"Kamakshi Hospital","contact":"108","lat":12.2996984,"lng":76.6238224,"address":"Kamakshi Hospital Road, Mysuru","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4934,"name":"Primary Health Centre Mullankolly","contact":"108","lat":11.8205132,"lng":76.1653784,"address":"Mysuru (Mysore), India","specializations":"Cardiology, Trauma","district":"Mysuru (Mysore)"},{"id":4935,"name":"Health Center","contact":"108","lat":12.3360301,"lng":76.6190672,"address":"Mysuru (Mysore), India","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4936,"name":"Balaji Elite Dental","contact":"108","lat":12.3296427,"lng":76.6300692,"address":"Sapthagiri Shopping Complex, 2nd Main Rd, Gokulam 2nd Stage, Vani Vilas Mohalla, Karnataka, Mysuru","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4937,"name":"JSS Hospital","contact":"108","lat":12.2959818,"lng":76.6552185,"address":"Ramanuja Road, Mysuru","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4938,"name":"Poornima Hospital","contact":"108","lat":12.2729139,"lng":76.6271986,"address":"Mysuru (Mysore), India","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4939,"name":"Apollo Hospital","contact":"108","lat":12.2958525,"lng":76.6324329,"address":"Mysuru (Mysore), India","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4940,"name":"Government Ayurveda Medical College","contact":"108","lat":12.3149518,"lng":76.6516333,"address":"Sayyaji Rao Road, Mysore","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4941,"name":"Krishna Rajendra Hospital","contact":"108","lat":12.3134375,"lng":76.6498626,"address":"Irwin Road, Mysuru","specializations":"Cardiology, Trauma","district":"Mysuru (Mysore)"},{"id":4942,"name":"Basappa Memorial Hospital","contact":"108","lat":12.320673,"lng":76.6204052,"address":"22/B, Vinoba , , Jayalakshmi Puram","specializations":"Cardiology, Oncology","district":"Mysuru (Mysore)"},{"id":4943,"name":"Kamakshi Hospital","contact":"108","lat":12.299563,"lng":76.6237359,"address":"Kamakshi Hospital Road, Mysuru","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4944,"name":"Narayana Hrudayalaya","contact":"108","lat":12.3445404,"lng":76.6730831,"address":"Mysore Ring Road, Mysuru","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4945,"name":"JSS Medical College","contact":"108","lat":12.3443681,"lng":76.6526544,"address":"M G Road","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4946,"name":"Gopalagowda Shanthaveri Memorial Hospital","contact":"108","lat":12.3086153,"lng":76.6679217,"address":"T Narasipura Road, Opp Nazarbad Police Station","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4947,"name":"Vasan Eye Care Hospital, Mysuru","contact":"108","lat":12.2961979,"lng":76.6436633,"address":"966/2, Jlb Road, Chamrajamohalla, Lakshmipuram","specializations":"Neurology, Pediatrics, Orthopedics","district":"Mysuru (Mysore)"},{"id":4948,"name":"Cauvery Hospital","contact":"108","lat":12.3053048,"lng":76.6959064,"address":"Teresian Circle, Siddartha Nagar","specializations":"Cardiology, Trauma","district":"Mysuru (Mysore)"},{"id":4949,"name":"Mysore Dental Care","contact":"108","lat":12.3256504,"lng":76.6151279,"address":"Mysuru (Mysore), India","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4950,"name":"Archana Hospital","contact":"108","lat":12.524194,"lng":76.8974528,"address":"K R Road Ashok Nagar","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4951,"name":"Government Hospital, Keralapura","contact":"08175-231434","lat":12.581217,"lng":76.1758976,"address":"Mysuru (Mysore), India","specializations":"Cardiology, Trauma","district":"Mysuru (Mysore)"},{"id":4952,"name":"Arvinda Nursing Home","contact":"108","lat":12.2779175,"lng":76.6293127,"address":"No. 644, 4Th Main, Arvind Nagar","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4953,"name":"Vivekananda Memorial Hospital","contact":"108","lat":11.9894271,"lng":76.3955345,"address":"Hanchipura Road, Sargur Post, H D Kote Taluk","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4954,"name":"MRC Eye Hospital","contact":"0821 247 2102","lat":12.30358,"lng":76.679204,"address":"Vinaya Marga, Mysuru","specializations":"Neurology, General Medicine","district":"Mysuru (Mysore)"},{"id":4955,"name":"JSS Ayurveda Hospital","contact":"108","lat":12.291219,"lng":76.6947466,"address":"Lalitadripura Road, Mysuru","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4956,"name":"P. K. Sanitorium","contact":"108","lat":12.3410431,"lng":76.6297534,"address":"Krishnaraja Sagara Road, Mysore","specializations":"Cardiology, Oncology","district":"Mysuru (Mysore)"},{"id":4957,"name":"Karunalaya Hospital, Nanajanagud","contact":"108","lat":12.0612631,"lng":76.676461,"address":"Nanjanagud","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4958,"name":"Manipal Hospital","contact":"108","lat":12.3499281,"lng":76.6602337,"address":"Siddique Nagar, Bannimantap, Mysuru","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4959,"name":"Bhagwan Mahaveer Darshan Eye Hospital","contact":"108","lat":12.3596533,"lng":76.6606623,"address":"Opposite K R Mill, Siddalingapura Post","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4960,"name":"Government Hospital, Gargeshwari","contact":"8227297744","lat":12.2407211,"lng":76.8911148,"address":"Near Hilal High School, T Narasipura MainRoad","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4961,"name":"Jayapura Government Hospital","contact":"108","lat":12.2038301,"lng":76.5568157,"address":"Near Boys Hostel, Jayapura village Mysore Taluk, HD Kote Manandavadi Main Road","specializations":"Oncology, General Medicine","district":"Mysuru (Mysore)"},{"id":4962,"name":"Primary Health Center Mullankolly","contact":"108","lat":11.8465258,"lng":76.1795472,"address":"Mysuru (Mysore), India","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4963,"name":"Community Health Centre, Pulpally","contact":"108","lat":11.782553,"lng":76.1622556,"address":"Mysuru (Mysore), India","specializations":"General Medicine, Trauma","district":"Mysuru (Mysore)"},{"id":4964,"name":"homeo hospital","contact":"108","lat":11.7831146,"lng":76.1631464,"address":"Mysuru (Mysore), India","specializations":"Neurology, Pediatrics, Orthopedics","district":"Mysuru (Mysore)"},{"id":4965,"name":"CHC pulpally","contact":"108","lat":11.7941324,"lng":76.1652103,"address":"Mysuru (Mysore), India","specializations":"Neurology, General Medicine","district":"Mysuru (Mysore)"},{"id":4966,"name":"SC Irulam","contact":"108","lat":11.7520794,"lng":76.1880769,"address":"Mysuru (Mysore), India","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4967,"name":"sc cheeyambam","contact":"108","lat":11.7539235,"lng":76.1995426,"address":"Mysuru (Mysore), India","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4968,"name":"SC Adikolly","contact":"108","lat":11.7812568,"lng":76.1946297,"address":"Mysuru (Mysore), India","specializations":"Cardiology, Trauma","district":"Mysuru (Mysore)"},{"id":4969,"name":"SC Vandikkadavu","contact":"108","lat":11.7849014,"lng":76.2050012,"address":"Mysuru (Mysore), India","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"},{"id":4970,"name":"SC IRIPPOOD","contact":"108","lat":11.8458657,"lng":76.1645833,"address":"Mysuru (Mysore), India","specializations":"Cardiology, Oncology","district":"Mysuru (Mysore)"},{"id":4971,"name":"SC CHAAMAPPARA","contact":"108","lat":11.8363676,"lng":76.208872,"address":"Mysuru (Mysore), India","specializations":"Neurology, General Medicine","district":"Mysuru (Mysore)"},{"id":4972,"name":"Gurushanthappa Government Hospital, Maddur","contact":"108","lat":12.5859392,"lng":77.0434659,"address":"General Hospital Maddur, Old MC Road Maddur, Maddur","specializations":"Neurology, Orthopedics, General Medicine","district":"Mysuru (Mysore)"},{"id":4973,"name":"Gundlupet Taluka Hospital","contact":"108","lat":11.8051526,"lng":76.686303,"address":"Mysuru (Mysore), India","specializations":"Orthopedics, Trauma","district":"Mysuru (Mysore)"},{"id":4974,"name":"Srinivasa Multispeciality Hospital","contact":"108","lat":12.32879,"lng":76.663312,"address":"Mysuru (Mysore), India","specializations":"Cardiology, General Medicine","district":"Mysuru (Mysore)"},{"id":4975,"name":"Mysuru District Hospital","contact":"108","lat":12.3498959,"lng":76.6280435,"address":"Near Metagalli Bus Stop","specializations":"Cardiology, Trauma","district":"Mysuru (Mysore)"}];
+        const route = [{"id":4805,"name":"Government Hospital Seelanere","contact":"108","lat":12.634737,"lng":76.559052,"address":"Near Govt High school, Sheelanere, Sheelanere Hobli","specializations":"Pediatrics, General Medicine","district":"Mysuru (Mysore)"}]; // Dijkstra path
+        const recommendedId = 4805;
+        // User's named starting location (editable in sidebar)
+        let originLocationName = "BITM Ballari";
+
+        // Initialize Map
+        const map = L.map('map').setView([patientLat, patientLng], 13);
+        
+        // OpenStreetMap Layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Markers Group
+        const markers = {};
+
+        // Custom Leaflet Icons
+        const patientIcon = L.divIcon({
+            html: '<div style="background-color: #3182ce; width: 14px; height: 14px; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 10px rgba(49, 130, 206, 0.8);"></div>',
+            className: 'custom-div-icon',
+            iconSize: [14, 14],
+            iconAnchor: [7, 7]
+        });
+
+        // Add Patient Marker
+        L.marker([patientLat, patientLng], { icon: patientIcon }).addTo(map)
+            .bindPopup("<b>📍 " + (originLocationName || "Your Location") + "</b><br><small>Lat/Lng: " + patientLat.toFixed(5) + ", " + patientLng.toFixed(5) + "</small>")
+            .openPopup();
+
+        // Build the Google Maps direction URL using the named origin
+        function buildGoogleMapsUrl(destLat, destLng) {
+            // Use place name as origin so Google Maps shows the correct label.
+            // Fallback to coordinates if name is empty.
+            const origin = originLocationName && originLocationName.trim().length > 0
+                ? encodeURIComponent(originLocationName.trim())
+                : patientLat + "," + patientLng;
+            return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destLat},${destLng}&travelmode=driving`;
+        }
+
+        // Update the nav button URL (called after any origin name change)
+        function updateNavLink() {
+            const link = document.getElementById('gmapsLink');
+            if (window._recommendedHosp) {
+                link.href = buildGoogleMapsUrl(window._recommendedHosp.lat, window._recommendedHosp.lng);
+            }
+        }
+
+        // Find recommended hospital from data
+        const recommendedHosp = hospitals.find(h => h.id === recommendedId);
+        window._recommendedHosp = recommendedHosp || null;
+        
+        // Render Recommended Hospital in sidebar
+        const recContainer = document.getElementById('recommendedContainer');
+        if (recommendedHosp) {
+            recContainer.innerHTML = `
+                <div class="hospital-card nearest">
+                    <div class="hospital-name">${recommendedHosp.name}</div>
+                    <div class="hospital-meta">📍 ${recommendedHosp.address}</div>
+                    <div class="hospital-meta">📞 ${recommendedHosp.contact}</div>
+                    <div class="hospital-meta">⚡ Lat/Lng: ${recommendedHosp.lat.toFixed(5)}, ${recommendedHosp.lng.toFixed(5)}</div>
+                    <div class="hospital-spec">${recommendedHosp.specializations}</div>
+                </div>
+            `;
+            document.getElementById('gmapsLink').href = buildGoogleMapsUrl(recommendedHosp.lat, recommendedHosp.lng);
+        } else {
+            recContainer.innerHTML = `<div class="hospital-card">No recommended hospital found.</div>`;
+        }
+
+        // Render Dijkstra Route Steps in sidebar
+        const routeContainer = document.getElementById('routeContainer');
+        routeContainer.innerHTML = '';
+        
+        // Step 0: Patient — use named location if available
+        const pStep = document.createElement('div');
+        pStep.className = 'route-step patient';
+        pStep.innerHTML = `
+            <div class="route-icon">P</div>
+            <div class="route-info">
+                <div class="route-title">${originLocationName && originLocationName.trim() ? originLocationName : 'Your Location'}</div>
+                <div>Lat/Lng: ${patientLat.toFixed(4)}, ${patientLng.toFixed(4)}</div>
+            </div>
+        `;
+        routeContainer.appendChild(pStep);
+
+        // Path coordinates for the polyline
+        const pathCoords = [[patientLat, patientLng]];
+        let currentIdx = 1;
+
+        route.forEach((hosp, idx) => {
+            const isLast = idx === route.length - 1;
+            const rStep = document.createElement('div');
+            rStep.className = 'route-step ' + (isLast ? 'nearest' : '');
+            rStep.innerHTML = `
+                <div class="route-icon">${currentIdx++}</div>
+                <div class="route-info">
+                    <div class="route-title">${hosp.name}</div>
+                    <div>${isLast ? 'Destination' : 'Intermediate Node'}  |  Lat/Lng: ${hosp.lat.toFixed(4)}, ${hosp.lng.toFixed(4)}</div>
+                </div>
+            `;
+            routeContainer.appendChild(rStep);
+            pathCoords.push([hosp.lat, hosp.lng]);
+        });
+
+        // Add Polyline for Route
+        const routePolyline = L.polyline(pathCoords, {
+            color: '#4a90e2',
+            weight: 5,
+            opacity: 0.8,
+            dashArray: '8, 8',
+            lineJoin: 'round'
+        }).addTo(map);
+
+        // Fit map bounds to show route
+        map.fitBounds(routePolyline.getBounds(), { padding: [50, 50] });
+
+        // Add Markers for all hospitals
+        hospitals.forEach(hosp => {
+            const isNearest = hosp.id === recommendedId;
+            const markerColor = isNearest ? '#e53e3e' : '#38a169';
+            
+            const hospitalIcon = L.divIcon({
+                html: `<div style="background-color: ${markerColor}; width: 16px; height: 16px; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 10px rgba(0,0,0,0.3);"></div>`,
+                className: 'custom-div-icon',
+                iconSize: [16, 16],
+                iconAnchor: [8, 8]
+            });
+
+            const marker = L.marker([hosp.lat, hosp.lng], { icon: hospitalIcon }).addTo(map);
+            marker.bindPopup(`
+                <div style="font-family: 'Outfit', sans-serif; min-width: 180px;">
+                    <b style="color: ${markerColor}; font-size: 14px;">${hosp.name}</b><br>
+                    <span style="font-size: 11.5px; color: #555;">📍 ${hosp.address}</span><br>
+                    <span style="font-size: 11.5px; color: #555;">📞 ${hosp.contact}</span><br>
+                    <span style="font-size: 11px; font-weight: bold; color: #3182ce; background: #ebf8ff; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 6px;">${hosp.specializations}</span>
+                </div>
+            `);
+
+            markers[hosp.id] = marker;
+            
+            // Highlight hospital card if clicked on map
+            marker.on('click', () => {
+                showToast("Selected: " + hosp.name);
+            });
+        });
+
+        // Toast Helper
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.style.display = 'block';
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 3000);
+        }
+
+        // Pre-fill origin input on load and wire updateNavLink feedback
+        window.addEventListener('load', () => {
+            const inp = document.getElementById('originInput');
+            if (inp && originLocationName && originLocationName.trim()) {
+                inp.value = originLocationName;
+            }
+        });
+
+        // Override updateNavLink to show confirmation flash
+        const _baseUpdateNavLink = updateNavLink;
+        function updateNavLink() {
+            const link = document.getElementById('gmapsLink');
+            if (window._recommendedHosp) {
+                const origin = originLocationName && originLocationName.trim().length > 0
+                    ? encodeURIComponent(originLocationName.trim())
+                    : patientLat + "," + patientLng;
+                link.href = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${window._recommendedHosp.lat},${window._recommendedHosp.lng}&travelmode=driving`;
+                // Show confirmation
+                const help = document.getElementById('originHelp');
+                if (help) {
+                    help.style.display = 'block';
+                    clearTimeout(help._t);
+                    help._t = setTimeout(() => { help.style.display = 'none'; }, 2000);
+                }
+            }
+        }
+
+        // --- BINARY SEARCH ALGORITHM IN FRONTEND ---
+        // Sort hospitals list by name alphabetically first to enable binary search
+        const sortedHospitals = [...hospitals].sort((a, b) => a.name.localeCompare(b.name));
+
+        function binarySearchHospital(arr, target) {
+            let left = 0;
+            let right = arr.length - 1;
+            target = target.toLowerCase().trim();
+
+            while (left <= right) {
+                let mid = Math.floor((left + right) / 2);
+                let midName = arr[mid].name.toLowerCase().trim();
+
+                if (midName === target) {
+                    return arr[mid];
+                }
+                if (midName < target) {
+                    left = mid + 1;
+                } else {
+                    right = mid - 1;
+                }
+            }
+            
+            // Fuzzy match fallback
+            return arr.find(h => h.name.toLowerCase().includes(target));
+        }
+
+        // Input listener to show search results dynamically
+        const searchInput = document.getElementById('searchInput');
+        const searchResults = document.getElementById('searchResults');
+
+        searchInput.addEventListener('input', () => {
+            const val = searchInput.value.trim().toLowerCase();
+            if (val === '') {
+                searchResults.style.display = 'none';
+                return;
+            }
+
+            // Filter items for autocomplete dropdown
+            const filtered = sortedHospitals.filter(h => h.name.toLowerCase().includes(val));
+            searchResults.innerHTML = '';
+            
+            if (filtered.length > 0) {
+                filtered.forEach(h => {
+                    const div = document.createElement('div');
+                    div.className = 'search-item';
+                    div.innerText = h.name;
+                    div.onclick = () => {
+                        searchInput.value = h.name;
+                        searchResults.style.display = 'none';
+                        triggerSearch();
+                    };
+                    searchResults.appendChild(div);
+                });
+                searchResults.style.display = 'block';
+            } else {
+                searchResults.style.display = 'none';
+            }
+        });
+
+        function triggerSearch() {
+            const query = searchInput.value;
+            const matched = binarySearchHospital(sortedHospitals, query);
+
+            if (matched) {
+                // Fly to the marker and open popup
+                map.flyTo([matched.lat, matched.lng], 16, { animate: true, duration: 1.5 });
+                setTimeout(() => {
+                    markers[matched.id].openPopup();
+                }, 1600);
+                showToast("Found: " + matched.name + " (via Binary Search)");
+            } else {
+                showToast("Hospital not found.");
+            }
+        }
+    </script>
+</body>
+</html>
